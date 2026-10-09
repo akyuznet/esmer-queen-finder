@@ -1,0 +1,25 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# ML artefacts
+/ml/data/
+/ml/runs/
+/ml/weights/
+/ml/**/*.onnx
+/ml/**/*_saved_model/
+
+# Model binary: produced by ml/train.py, not committed (the dev bootstrap model has no license)
+/app/src/main/assets/queen.tflite

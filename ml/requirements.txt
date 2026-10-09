@@ -1,0 +1,11 @@
+ultralytics>=8.3
+roboflow
+onnx
+onnxslim
+onnxruntime
+tensorflow>=2.16
+onnx2tf
+sng4onnx
+onnx_graphsurgeon
+ai-edge-litert
+pyyaml

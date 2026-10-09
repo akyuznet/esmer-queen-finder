@@ -1,0 +1,37 @@
+<resources>
+    <string name="app_name">ESMER QUEEN FINDER</string>
+
+    <!-- Camera screen -->
+    <string name="camera_permission_needed">The app needs the camera to look for the queen.</string>
+    <string name="grant_camera">Allow camera</string>
+    <string name="queen_found">Queen!</string>
+    <string name="searching">Searching for the queen…</string>
+    <string name="torch">Torch</string>
+    <string name="snapshot">Snapshot</string>
+    <string name="settings">Settings</string>
+    <string name="snapshot_saved">Saved to Pictures/QueenFinder</string>
+    <string name="snapshot_failed">Could not save the photo</string>
+    <string name="label_queen">queen</string>
+    <string name="label_drone">drone</string>
+    <string name="model_failed">The detection model could not be loaded</string>
+    <string name="stats_format">%1$d fps · %2$d ms · %3$s</string>
+
+    <!-- Settings screen -->
+    <string name="settings_title">Settings</string>
+    <string name="back">Back</string>
+    <string name="setting_sensitivity">Sensitivity</string>
+    <string name="setting_sensitivity_hint">Lower values find more queens but raise false alarms. Default 0.50.</string>
+    <string name="setting_stable_frames">Frames before alert</string>
+    <string name="setting_stable_frames_hint">The queen must be seen in this many consecutive frames before the app alerts.</string>
+    <string name="setting_haptics">Vibrate on queen</string>
+    <string name="setting_sound">Beep on queen</string>
+    <string name="setting_show_drones">Show drone boxes</string>
+    <string name="setting_show_stats">Show fps and timing</string>
+    <string name="setting_model">Model</string>
+    <string name="setting_about">About</string>
+    <string name="about_text">Free, offline queen-bee finder. Open source under AGPL-3.0. Detection runs entirely on this phone; no data leaves the device.</string>
+    <string name="model_info_format">%1$s · input %2$d px · %3$s</string>
+    <string name="backend_gpu">GPU</string>
+    <string name="backend_cpu">CPU</string>
+    <string name="backend_none">not loaded</string>
+</resources>
