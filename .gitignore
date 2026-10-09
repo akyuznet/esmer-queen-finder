@@ -25,3 +25,8 @@ local.properties
 /app/src/main/assets/queen.tflite
 /ml/*.pt
 /ml/cpu_train.log
+
+# Release signing (never commit)
+/keystore/
+/keystore.properties
+/store/_*.svg

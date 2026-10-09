@@ -1,6 +1,15 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+}
+
+// Release signing comes from an untracked keystore.properties at the project root:
+//   storeFile=keystore/upload.jks, storePassword=..., keyAlias=upload, keyPassword=...
+val keystoreProps = Properties().apply {
+    val f = rootProject.file("keystore.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
 }
 
 android {
@@ -14,17 +23,39 @@ android {
         minSdk = 29
         targetSdk = 37
         versionCode = 1
-        versionName = "0.1.0"
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    buildTypes {
-        release {
-            optimization {
-                enable = false
+    signingConfigs {
+        if (keystoreProps.isNotEmpty()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
             }
         }
+    }
+
+    buildTypes {
+        release {
+            // R8 shrinking and resource removal; keep rules live in src/main/keepRules.
+            optimization {
+                enable = true
+            }
+            if (keystoreProps.isNotEmpty()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    }
+
+    bundle {
+        // One bundle serves every ABI and density; Play delivers only what each device needs.
+        abi { enableSplit = true }
+        density { enableSplit = true }
+        language { enableSplit = true }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
