@@ -23,3 +23,5 @@ local.properties
 
 # Model binary: produced by ml/train.py, not committed (the dev bootstrap model has no license)
 /app/src/main/assets/queen.tflite
+/ml/*.pt
+/ml/cpu_train.log
