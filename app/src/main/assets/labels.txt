@@ -1,4 +1,2 @@
-bee
-drone
-pollenbee
 queen
+drone

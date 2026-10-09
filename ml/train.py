@@ -43,20 +43,42 @@ def train(data: str, model: str, epochs: int, imgsz: int, batch: int, fraction: 
     return ROOT / "runs" / "detect" / "queen" / "weights" / "best.pt"
 
 
+def export_windows(m: YOLO, imgsz: int) -> Path:
+    """Ultralytics refuses TFLite export on Windows; go ONNX -> onnx2tf (float32).
+    The app's decoder accepts the resulting [1, 4+nc, N] pixel-space output."""
+    import subprocess
+    import sys
+
+    onnx_path = Path(m.export(format="onnx", imgsz=imgsz, opset=17, simplify=True, nms=False))
+    out_dir = onnx_path.parent / "onnx2tf"
+    subprocess.run(
+        [sys.executable, "-m", "onnx2tf", "-i", str(onnx_path), "-o", str(out_dir),
+         "-ois", f"images:1,3,{imgsz},{imgsz}"],
+        check=True,
+    )
+    return next(out_dir.glob("*_float32.tflite"))
+
+
 def export(weights: Path, imgsz: int, int8: bool, data: str | None) -> Path:
+    import platform
+
     m = YOLO(str(weights))
-    kwargs = dict(imgsz=imgsz, nms=False)
-    if int8:
-        kwargs["int8"] = True
-        if data:
-            kwargs["data"] = data
-    out = Path(m.export(format="tflite", **kwargs))
-    # Ultralytics writes a folder of variants; pick the one we asked for.
-    if out.is_dir():
-        candidates = sorted(out.glob("*_int8.tflite" if int8 else "*_float32.tflite"))
-        if not candidates:
-            candidates = sorted(out.glob("*.tflite"))
-        out = candidates[0]
+    if platform.system() == "Windows":
+        print("Windows: using ONNX + onnx2tf float32 export (INT8 needs Linux or Colab)")
+        out = export_windows(m, imgsz)
+    else:
+        kwargs = dict(imgsz=imgsz, nms=False)
+        if int8:
+            kwargs["int8"] = True
+            if data:
+                kwargs["data"] = data
+        out = Path(m.export(format="tflite", **kwargs))
+        # Ultralytics writes a folder of variants; pick the one we asked for.
+        if out.is_dir():
+            candidates = sorted(out.glob("*_int8.tflite" if int8 else "*_float32.tflite"))
+            if not candidates:
+                candidates = sorted(out.glob("*.tflite"))
+            out = candidates[0]
     ASSETS.mkdir(parents=True, exist_ok=True)
     shutil.copy(out, ASSETS / "queen.tflite")
     names = m.names if isinstance(m.names, dict) else dict(enumerate(m.names))
