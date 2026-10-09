@@ -67,14 +67,23 @@ class FramePreprocessor(private val inputSize: Int) {
         return Letterbox(inputSize, scale, padX, padY, frame.width, frame.height)
     }
 
-    /** Fills [floatBuffer] from the last letterboxed square. */
-    fun fillFloat(): ByteBuffer {
+    /**
+     * Fills [floatBuffer] from the last letterboxed square.
+     * @param channelsFirst true for NCHW inputs (planar R, G, B), false for NHWC.
+     */
+    fun fillFloat(channelsFirst: Boolean = false): ByteBuffer {
         floatBuffer.rewind()
         val fb = floatBuffer.asFloatBuffer()
-        for (p in pixels) {
-            fb.put(((p shr 16) and 0xFF) / 255f)
-            fb.put(((p shr 8) and 0xFF) / 255f)
-            fb.put((p and 0xFF) / 255f)
+        if (channelsFirst) {
+            for (p in pixels) fb.put(((p shr 16) and 0xFF) / 255f)
+            for (p in pixels) fb.put(((p shr 8) and 0xFF) / 255f)
+            for (p in pixels) fb.put((p and 0xFF) / 255f)
+        } else {
+            for (p in pixels) {
+                fb.put(((p shr 16) and 0xFF) / 255f)
+                fb.put(((p shr 8) and 0xFF) / 255f)
+                fb.put((p and 0xFF) / 255f)
+            }
         }
         floatBuffer.rewind()
         return floatBuffer
@@ -84,15 +93,21 @@ class FramePreprocessor(private val inputSize: Int) {
      * Fills [byteBuffer] from the last letterboxed square, quantizing each 0..1 value
      * with the input tensor's scale and zero point.
      */
-    fun fillQuantized(scale: Float, zeroPoint: Int, signed: Boolean): ByteBuffer {
+    fun fillQuantized(scale: Float, zeroPoint: Int, signed: Boolean, channelsFirst: Boolean = false): ByteBuffer {
         byteBuffer.rewind()
         val lo = if (signed) -128 else 0
         val hi = if (signed) 127 else 255
         val inv = if (scale == 0f) 255f else 1f / (255f * scale)
-        for (p in pixels) {
-            byteBuffer.put(q(((p shr 16) and 0xFF), inv, zeroPoint, lo, hi))
-            byteBuffer.put(q(((p shr 8) and 0xFF), inv, zeroPoint, lo, hi))
-            byteBuffer.put(q((p and 0xFF), inv, zeroPoint, lo, hi))
+        if (channelsFirst) {
+            for (p in pixels) byteBuffer.put(q(((p shr 16) and 0xFF), inv, zeroPoint, lo, hi))
+            for (p in pixels) byteBuffer.put(q(((p shr 8) and 0xFF), inv, zeroPoint, lo, hi))
+            for (p in pixels) byteBuffer.put(q((p and 0xFF), inv, zeroPoint, lo, hi))
+        } else {
+            for (p in pixels) {
+                byteBuffer.put(q(((p shr 16) and 0xFF), inv, zeroPoint, lo, hi))
+                byteBuffer.put(q(((p shr 8) and 0xFF), inv, zeroPoint, lo, hi))
+                byteBuffer.put(q((p and 0xFF), inv, zeroPoint, lo, hi))
+            }
         }
         byteBuffer.rewind()
         return byteBuffer

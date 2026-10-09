@@ -20,7 +20,7 @@
     <string name="settings_title">Settings</string>
     <string name="back">Back</string>
     <string name="setting_sensitivity">Sensitivity</string>
-    <string name="setting_sensitivity_hint">Lower values find more queens but raise false alarms. Default 0.50.</string>
+    <string name="setting_sensitivity_hint">Lower values find more queens but raise false alarms. Default 0.40.</string>
     <string name="setting_stable_frames">Frames before alert</string>
     <string name="setting_stable_frames_hint">The queen must be seen in this many consecutive frames before the app alerts.</string>
     <string name="setting_haptics">Vibrate on queen</string>

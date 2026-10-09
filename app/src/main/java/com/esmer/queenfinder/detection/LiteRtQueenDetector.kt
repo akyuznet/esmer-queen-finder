@@ -45,6 +45,7 @@ class LiteRtQueenDetector(
         private set
 
     private var inputType: DataType = DataType.FLOAT32
+    private var channelsFirst = false
     private var inScale = 1f
     private var inZero = 0
     private var outType: DataType = DataType.FLOAT32
@@ -87,8 +88,9 @@ class LiteRtQueenDetector(
         interpreter = created
 
         val input = created.getInputTensor(0)
-        val shape = input.shape() // [1, H, W, 3]
-        inputSize = shape[1]
+        val shape = input.shape() // [1, H, W, 3] (NHWC) or [1, 3, H, W] (NCHW)
+        channelsFirst = shape.size == 4 && shape[1] == 3 && shape[3] != 3
+        inputSize = if (channelsFirst) shape[2] else shape[1]
         inputType = input.dataType()
         inScale = input.quantizationParams().scale
         inZero = input.quantizationParams().zeroPoint
@@ -111,7 +113,7 @@ class LiteRtQueenDetector(
         val count = outShape.fold(1) { acc, d -> acc * d }
         outputFloats = FloatArray(count)
         outputBuffer = ByteBuffer.allocateDirect(output.numBytes()).order(ByteOrder.nativeOrder())
-        Log.i(TAG, "Loaded $modelName on $backend, input $inputSize, output ${outShape.toList()}, layout $layout")
+        Log.i(TAG, "Loaded $modelName on $backend, input $inputSize ${if (channelsFirst) "NCHW" else "NHWC"} $inputType, output ${outShape.toList()}, layout $layout")
     }
 
     override fun detect(frame: Bitmap, confidence: Float): List<Detection> {
@@ -119,9 +121,9 @@ class LiteRtQueenDetector(
         val pre = preprocessor!!
         val lb = pre.letterbox(frame)
         val input: ByteBuffer = when (inputType) {
-            DataType.FLOAT32 -> pre.fillFloat()
-            DataType.UINT8 -> pre.fillQuantized(inScale, inZero, signed = false)
-            DataType.INT8 -> pre.fillQuantized(inScale, inZero, signed = true)
+            DataType.FLOAT32 -> pre.fillFloat(channelsFirst)
+            DataType.UINT8 -> pre.fillQuantized(inScale, inZero, signed = false, channelsFirst = channelsFirst)
+            DataType.INT8 -> pre.fillQuantized(inScale, inZero, signed = true, channelsFirst = channelsFirst)
             else -> error("Unsupported input type $inputType")
         }
         val out = outputBuffer!!

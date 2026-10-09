@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 data class Settings(
-    val confidence: Float = 0.5f,
+    val confidence: Float = 0.4f,
     val stableFrames: Int = 5,
     val haptics: Boolean = true,
     val sound: Boolean = true,
@@ -35,7 +35,7 @@ class SettingsStore(private val context: Context) {
 
     val settings: Flow<Settings> = context.dataStore.data.map { p ->
         Settings(
-            confidence = p[Keys.confidence] ?: 0.5f,
+            confidence = p[Keys.confidence] ?: 0.4f,
             stableFrames = p[Keys.stableFrames] ?: 5,
             haptics = p[Keys.haptics] ?: true,
             sound = p[Keys.sound] ?: true,
