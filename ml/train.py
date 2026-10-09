@@ -51,12 +51,14 @@ def export_windows(m: YOLO, imgsz: int) -> Path:
 
     onnx_path = Path(m.export(format="onnx", imgsz=imgsz, opset=17, simplify=True, nms=False))
     out_dir = onnx_path.parent / "onnx2tf"
+    # The TF converter backend writes static shapes, which the Android GPU delegate
+    # requires; the default flatbuffer_direct backend leaves dynamic signatures.
     subprocess.run(
         [sys.executable, "-m", "onnx2tf", "-i", str(onnx_path), "-o", str(out_dir),
-         "-ois", f"images:1,3,{imgsz},{imgsz}"],
+         "-tb", "tf_converter", "-b", "1", "-ois", f"images:1,3,{imgsz},{imgsz}"],
         check=True,
     )
-    return next(out_dir.glob("*_float32.tflite"))
+    return next(out_dir.glob("*_float16.tflite"))
 
 
 def export(weights: Path, imgsz: int, int8: bool, data: str | None) -> Path:

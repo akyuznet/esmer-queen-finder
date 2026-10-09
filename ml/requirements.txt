@@ -9,3 +9,5 @@ sng4onnx
 onnx_graphsurgeon
 ai-edge-litert
 pyyaml
+tf_keras
+opencv-python
