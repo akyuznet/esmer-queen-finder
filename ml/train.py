@@ -18,13 +18,15 @@ ROOT = Path(__file__).resolve().parent
 ASSETS = ROOT.parent / "app" / "src" / "main" / "assets"
 
 
-def train(data: str, model: str, epochs: int, imgsz: int, batch: int) -> Path:
+def train(data: str, model: str, epochs: int, imgsz: int, batch: int, fraction: float, workers: int) -> Path:
     m = YOLO(model)
     m.train(
         data=data,
         epochs=epochs,
         imgsz=imgsz,
         batch=batch,
+        fraction=fraction,
+        workers=workers,
         project=str(ROOT / "runs" / "detect"),
         name="queen",
         exist_ok=True,
@@ -70,12 +72,14 @@ if __name__ == "__main__":
     ap.add_argument("--epochs", type=int, default=100)
     ap.add_argument("--imgsz", type=int, default=640, help="training image size")
     ap.add_argument("--batch", type=int, default=16)
+    ap.add_argument("--fraction", type=float, default=1.0, help="use this fraction of the training set")
+    ap.add_argument("--workers", type=int, default=4)
     ap.add_argument("--export-imgsz", type=int, default=416, help="on-device input size")
     ap.add_argument("--no-int8", action="store_true")
     ap.add_argument("--export-only", metavar="WEIGHTS")
     args = ap.parse_args()
 
     weights = Path(args.export_only) if args.export_only else train(
-        args.data, args.model, args.epochs, args.imgsz, args.batch
+        args.data, args.model, args.epochs, args.imgsz, args.batch, args.fraction, args.workers
     )
     export(weights, args.export_imgsz, int8=not args.no_int8, data=args.data)

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import random
 import shutil
 from pathlib import Path
@@ -21,23 +22,29 @@ ROOT = Path(__file__).resolve().parent
 RAW = ROOT / "data" / "raw"
 MERGED = ROOT / "data" / "merged"
 
-# (workspace, project, version). Versions can be adjusted on the dataset page.
+# (workspace, project, version). None = newest version on Roboflow.
 SOURCES = [
-    ("sabian", "beesbeesbees", 1),
-    ("beequeen-detector", "beequeendetector-ta7ig", 1),
-    ("beedataset", "honey-bee-detection-model-zgjnb-dmdag", 1),
-    ("sharedws", "queen_bee-kcfnv", 1),
-    ("beekeeper4", "queen_drone_bee-detection", 1),
-    ("qualitypineapple", "queen-class", 1),
+    ("sabian", "beesbeesbees", None),
+    ("beequeen-detector", "beequeendetector-ta7ig", None),
+    ("beedataset", "honey-bee-detection-model-zgjnb-dmdag", None),
+    ("sharedws", "queen_bee-kcfnv", None),
+    ("beekeeper4", "queen_drone_bee-detection", None),
+    ("qualitypineapple", "queen-class", None),
+    ("queenbee", "queen_bee_detection-k2nw7", None),
+    ("tainuis-workspace", "bee-project-upcez", None),
 ]
 
 TARGET_CLASSES = ["queen", "drone"]
 
 # Any source class name containing one of these substrings maps to the target class.
 CLASS_ALIASES = {
-    "queen": ["queen"],
+    "queen": ["queen", "qbee"],
     "drone": ["drone"],
 }
+
+# Images with no queen or drone (workers only) are kept as background negatives
+# at this rate; the detector needs them to learn that workers are not queens.
+NEGATIVE_KEEP = 0.35
 
 
 def download(api_key: str) -> list[Path]:
@@ -46,17 +53,25 @@ def download(api_key: str) -> list[Path]:
     rf = Roboflow(api_key=api_key)
     out = []
     for ws, proj, ver in SOURCES:
-        dest = RAW / f"{ws}__{proj}__v{ver}"
-        if dest.exists():
-            print(f"skip (exists): {dest.name}")
-            out.append(dest)
+        existing = sorted(RAW.glob(f"{ws}__{proj}__v*"))
+        if existing:
+            print(f"skip (exists): {existing[-1].name}")
+            out.append(existing[-1])
             continue
-        print(f"downloading {ws}/{proj} v{ver}")
         try:
-            ds = rf.workspace(ws).project(proj).version(ver).download("yolov8", location=str(dest))
+            project = rf.workspace(ws).project(proj)
+            if ver is None:
+                versions = project.versions()
+                if not versions:
+                    print(f"  {ws}/{proj}: no versions")
+                    continue
+                ver = max(int(v.version.split("/")[-1]) for v in versions)
+            dest = RAW / f"{ws}__{proj}__v{ver}"
+            print(f"downloading {ws}/{proj} v{ver} (license: {getattr(project, 'license', '?')})")
+            ds = project.version(ver).download("yolov8", location=str(dest))
             out.append(Path(ds.location))
         except Exception as e:  # noqa: BLE001
-            print(f"  failed: {e}")
+            print(f"  {ws}/{proj} failed: {e}")
     return out
 
 
@@ -111,8 +126,10 @@ def merge(sources: list[Path], holdout: float, seed: int) -> None:
                     if ci in cmap:
                         lines.append(" ".join([str(cmap[ci])] + parts[1:5]))
             if not lines:
-                counts["dropped_empty"] += 1
-                continue
+                if random.random() > NEGATIVE_KEEP:
+                    counts["dropped_empty"] += 1
+                    continue
+                counts["negatives"] = counts.get("negatives", 0) + 1
             r = random.random()
             split = "test" if r < holdout else ("val" if r < holdout * 2 else "train")
             name = f"{src.name}__{img.stem}"
@@ -136,9 +153,12 @@ def merge(sources: list[Path], holdout: float, seed: int) -> None:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("--api-key", required=True, help="Roboflow API key (free account)")
+    ap.add_argument("--api-key", default=os.environ.get("ROBOFLOW_API_KEY"),
+                    help="Roboflow API key (free account); or set ROBOFLOW_API_KEY")
     ap.add_argument("--holdout", type=float, default=0.1, help="fraction for test and for val")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
+    if not args.api_key:
+        ap.error("--api-key or ROBOFLOW_API_KEY is required")
     srcs = download(args.api_key)
     merge(srcs, args.holdout, args.seed)

@@ -35,6 +35,12 @@ file must contain `queen`; `drone` is optional but recommended.
 
 ## Train the model
 
+Fastest: open [`ml/colab_train.ipynb` in Google Colab](https://colab.research.google.com/github/akyuznet/esmer-queen-finder/blob/main/ml/colab_train.ipynb),
+pick a T4 GPU runtime and run all cells. It asks for a free Roboflow API key and
+downloads `queen.tflite` and `labels.txt` at the end.
+
+Locally (slow without a GPU):
+
 ```
 cd ml
 python -m pip install -r requirements.txt
