@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Size
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,10 +38,12 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -109,10 +113,31 @@ private fun CameraContent(viewModel: CameraViewModel, onOpenSettings: () -> Unit
 
     var camera by remember { mutableStateOf<Camera?>(null) }
     var torchOn by remember { mutableStateOf(false) }
+    var zoomRatio by remember { mutableFloatStateOf(1f) }
+    var maxZoom by remember { mutableFloatStateOf(1f) }
     val previewView = remember { PreviewView(context).apply { scaleType = PreviewView.ScaleType.FILL_CENTER } }
 
     LaunchedEffect(previewView) {
-        camera = bindCamera(context, lifecycleOwner, previewView, viewModel)
+        val cam = bindCamera(context, lifecycleOwner, previewView, viewModel)
+        camera = cam
+        cam.cameraInfo.zoomState.observe(lifecycleOwner) { z ->
+            zoomRatio = z.zoomRatio
+            maxZoom = z.maxZoomRatio
+        }
+        // Pinch to zoom on the preview.
+        val detector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(d: ScaleGestureDetector): Boolean {
+                val current = cam.cameraInfo.zoomState.value?.zoomRatio ?: 1f
+                val max = cam.cameraInfo.zoomState.value?.maxZoomRatio ?: 1f
+                cam.cameraControl.setZoomRatio((current * d.scaleFactor).coerceIn(1f, max))
+                return true
+            }
+        })
+        previewView.setOnTouchListener { v, event ->
+            detector.onTouchEvent(event)
+            if (event.action == MotionEvent.ACTION_UP) v.performClick()
+            true
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
@@ -155,7 +180,7 @@ private fun CameraContent(viewModel: CameraViewModel, onOpenSettings: () -> Unit
                     Backend.NONE -> stringResource(R.string.backend_none)
                 }
                 Text(
-                    text = stringResource(R.string.stats_format, state.fps.toInt(), state.inferenceMs, backend),
+                    text = stringResource(R.string.stats_format, state.fps.toInt(), state.inferenceMs, state.modelMs, backend),
                     color = Color.White,
                     style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier
@@ -167,6 +192,28 @@ private fun CameraContent(viewModel: CameraViewModel, onOpenSettings: () -> Unit
             state.error?.let {
                 Text(it, color = Color(0xFFFF8A80), style = MaterialTheme.typography.labelSmall, maxLines = 3)
                 Spacer(Modifier.height(8.dp))
+            }
+            if (maxZoom > 1.01f) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                ) {
+                    Slider(
+                        value = zoomRatio.coerceIn(1f, maxZoom),
+                        onValueChange = { v -> camera?.cameraControl?.setZoomRatio(v) },
+                        valueRange = 1f..maxZoom,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = String.format(java.util.Locale.US, "%.1fx", zoomRatio),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    )
+                }
             }
             Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp)) {
                 FilledTonalButton(onClick = {

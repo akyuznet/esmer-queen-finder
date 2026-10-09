@@ -49,7 +49,10 @@ data class DetectionState(
     val frameWidth: Int = 0,
     val frameHeight: Int = 0,
     val fps: Float = 0f,
+    /** Whole pipeline per frame: convert, letterbox, model, decode, track. */
     val inferenceMs: Long = 0,
+    /** Interpreter only. */
+    val modelMs: Long = 0,
     val backend: Backend = Backend.NONE,
     val error: String? = null,
 )

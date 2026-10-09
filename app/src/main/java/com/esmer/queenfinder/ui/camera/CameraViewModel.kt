@@ -50,7 +50,7 @@ class CameraViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Saves the last analysed frame to Pictures/QueenFinder. Returns true on success. */
     suspend fun saveSnapshot(): Boolean = withContext(Dispatchers.IO) {
-        val frame: Bitmap = pipeline.lastFrame ?: return@withContext false
+        val frame: Bitmap = pipeline.uprightSnapshot() ?: return@withContext false
         val resolver = getApplication<Application>().contentResolver
         val name = "queen_" + SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date()) + ".jpg"
         val values = ContentValues().apply {

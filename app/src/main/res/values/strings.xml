@@ -14,7 +14,7 @@
     <string name="label_queen">queen</string>
     <string name="label_drone">drone</string>
     <string name="model_failed">The detection model could not be loaded</string>
-    <string name="stats_format">%1$d fps · %2$d ms · %3$s</string>
+    <string name="stats_format">%1$d fps · %2$d ms (model %3$d) · %4$s</string>
 
     <!-- Settings screen -->
     <string name="settings_title">Settings</string>

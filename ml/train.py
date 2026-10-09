@@ -43,25 +43,26 @@ def train(data: str, model: str, epochs: int, imgsz: int, batch: int, fraction: 
     return ROOT / "runs" / "detect" / "queen" / "weights" / "best.pt"
 
 
-def export_windows(m: YOLO, imgsz: int) -> Path:
-    """Ultralytics refuses TFLite export on Windows; go ONNX -> onnx2tf (float32).
+def export_windows(m: YOLO, imgsz: int | list[int]) -> Path:
+    """Ultralytics refuses TFLite export on Windows; go ONNX -> onnx2tf (float16).
     The app's decoder accepts the resulting [1, 4+nc, N] pixel-space output."""
     import subprocess
     import sys
 
-    onnx_path = Path(m.export(format="onnx", imgsz=imgsz, opset=17, simplify=True, nms=False))
-    out_dir = onnx_path.parent / "onnx2tf"
+    h, w = (imgsz, imgsz) if isinstance(imgsz, int) else (imgsz[0], imgsz[1])
+    onnx_path = Path(m.export(format="onnx", imgsz=[h, w], opset=17, simplify=True, nms=False))
+    out_dir = onnx_path.parent / f"onnx2tf_{h}x{w}"
     # The TF converter backend writes static shapes, which the Android GPU delegate
     # requires; the default flatbuffer_direct backend leaves dynamic signatures.
     subprocess.run(
         [sys.executable, "-m", "onnx2tf", "-i", str(onnx_path), "-o", str(out_dir),
-         "-tb", "tf_converter", "-b", "1", "-ois", f"images:1,3,{imgsz},{imgsz}"],
+         "-tb", "tf_converter", "-b", "1", "-ois", f"images:1,3,{h},{w}"],
         check=True,
     )
     return next(out_dir.glob("*_float16.tflite"))
 
 
-def export(weights: Path, imgsz: int, int8: bool, data: str | None) -> Path:
+def export(weights: Path, imgsz: int | list[int], int8: bool, data: str | None) -> Path:
     import platform
 
     m = YOLO(str(weights))
@@ -98,7 +99,8 @@ if __name__ == "__main__":
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--fraction", type=float, default=1.0, help="use this fraction of the training set")
     ap.add_argument("--workers", type=int, default=4)
-    ap.add_argument("--export-imgsz", type=int, default=416, help="on-device input size")
+    ap.add_argument("--export-imgsz", default="480x864",
+                    help="on-device input as HxW (16:9 keeps every camera pixel) or a single square size")
     ap.add_argument("--no-int8", action="store_true")
     ap.add_argument("--export-only", metavar="WEIGHTS")
     args = ap.parse_args()
@@ -106,4 +108,5 @@ if __name__ == "__main__":
     weights = Path(args.export_only) if args.export_only else train(
         args.data, args.model, args.epochs, args.imgsz, args.batch, args.fraction, args.workers
     )
-    export(weights, args.export_imgsz, int8=not args.no_int8, data=args.data)
+    shape = [int(v) for v in str(args.export_imgsz).lower().split("x")]
+    export(weights, shape if len(shape) == 2 else shape[0], int8=not args.no_int8, data=args.data)

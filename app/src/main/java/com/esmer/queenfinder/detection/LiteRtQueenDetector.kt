@@ -37,11 +37,21 @@ class LiteRtQueenDetector(
     private var outputBuffer: ByteBuffer? = null
     private var outputFloats: FloatArray = FloatArray(0)
 
-    override var inputSize: Int = 0
+    override var inputWidth: Int = 0
+        private set
+    override var inputHeight: Int = 0
         private set
     override var backend: Backend = Backend.NONE
         private set
     override var labels: List<String> = emptyList()
+        private set
+    override var lastModelMs: Long = 0
+        private set
+    /** Letterbox + tensor fill time of the last [detect], for profiling. */
+    var lastPreMs: Long = 0
+        private set
+    /** Output read + decode + NMS time of the last [detect], for profiling. */
+    var lastPostMs: Long = 0
         private set
 
     private var inputType: DataType = DataType.FLOAT32
@@ -67,7 +77,10 @@ class LiteRtQueenDetector(
             try {
                 val compat = CompatibilityList()
                 if (compat.isDelegateSupportedOnThisDevice) {
-                    val delegate = GpuDelegate(compat.bestOptionsForThisDevice)
+                    val gpuOptions = compat.bestOptionsForThisDevice
+                        .setPrecisionLossAllowed(true) // fp16 compute: much faster on mobile GPUs
+                        .setInferencePreference(GpuDelegate.Options.INFERENCE_PREFERENCE_SUSTAINED_SPEED)
+                    val delegate = GpuDelegate(gpuOptions)
                     val options = Interpreter.Options().addDelegate(delegate)
                     created = Interpreter(model, options)
                     gpuDelegate = delegate
@@ -90,11 +103,12 @@ class LiteRtQueenDetector(
         val input = created.getInputTensor(0)
         val shape = input.shape() // [1, H, W, 3] (NHWC) or [1, 3, H, W] (NCHW)
         channelsFirst = shape.size == 4 && shape[1] == 3 && shape[3] != 3
-        inputSize = if (channelsFirst) shape[2] else shape[1]
+        inputHeight = if (channelsFirst) shape[2] else shape[1]
+        inputWidth = if (channelsFirst) shape[3] else shape[2]
         inputType = input.dataType()
         inScale = input.quantizationParams().scale
         inZero = input.quantizationParams().zeroPoint
-        preprocessor = FramePreprocessor(inputSize)
+        preprocessor = FramePreprocessor(inputWidth, inputHeight)
 
         val output = created.getOutputTensor(0)
         outShape = output.shape()
@@ -113,12 +127,13 @@ class LiteRtQueenDetector(
         val count = outShape.fold(1) { acc, d -> acc * d }
         outputFloats = FloatArray(count)
         outputBuffer = ByteBuffer.allocateDirect(output.numBytes()).order(ByteOrder.nativeOrder())
-        Log.i(TAG, "Loaded $modelName on $backend, input $inputSize ${if (channelsFirst) "NCHW" else "NHWC"} $inputType, output ${outShape.toList()}, layout $layout")
+        Log.i(TAG, "Loaded $modelName on $backend, input ${inputWidth}x$inputHeight ${if (channelsFirst) "NCHW" else "NHWC"} $inputType, output ${outShape.toList()}, layout $layout")
     }
 
     override fun detect(frame: Bitmap, confidence: Float): List<Detection> {
         val interp = interpreter ?: error("call load() first")
         val pre = preprocessor!!
+        val tPre = android.os.SystemClock.elapsedRealtime()
         val lb = pre.letterbox(frame)
         val input: ByteBuffer = when (inputType) {
             DataType.FLOAT32 -> pre.fillFloat(channelsFirst)
@@ -128,10 +143,16 @@ class LiteRtQueenDetector(
         }
         val out = outputBuffer!!
         out.rewind()
+        val t0 = android.os.SystemClock.elapsedRealtime()
+        lastPreMs = t0 - tPre
         interp.run(input, out)
+        val t1 = android.os.SystemClock.elapsedRealtime()
+        lastModelMs = t1 - t0
         out.rewind()
         readOutput(out)
-        return nms(decode(confidence, lb))
+        val result = nms(decode(confidence, lb))
+        lastPostMs = android.os.SystemClock.elapsedRealtime() - t1
+        return result
     }
 
     private fun readOutput(buf: ByteBuffer) {
@@ -165,7 +186,8 @@ class LiteRtQueenDetector(
                 pixelSpace = true; break
             }
         }
-        val norm = if (pixelSpace) 1f / lb.inputSize else 1f
+        val normX = if (pixelSpace) 1f / lb.inputWidth else 1f
+        val normY = if (pixelSpace) 1f / lb.inputHeight else 1f
 
         for (i in 0 until n) {
             var best = -1
@@ -178,10 +200,10 @@ class LiteRtQueenDetector(
                 if (s > bestScore) { bestScore = s; best = c }
             }
             if (best < 0 || bestScore < confidence) continue
-            val cx = value(out, i, 0, n, stride) * norm
-            val cy = value(out, i, 1, n, stride) * norm
-            val w = value(out, i, 2, n, stride) * norm
-            val h = value(out, i, 3, n, stride) * norm
+            val cx = value(out, i, 0, n, stride) * normX
+            val cy = value(out, i, 1, n, stride) * normY
+            val w = value(out, i, 2, n, stride) * normX
+            val h = value(out, i, 3, n, stride) * normY
             val box = Box(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2)
             result.add(Detection(best, labels[best], bestScore, lb.toFrame(box)))
         }
